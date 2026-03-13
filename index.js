@@ -1,5 +1,6 @@
 const fs = require("fs");
 
+// Base de dados (40 principais itens)
 const dadosObra = [
   {
     codigo: "01-11-03-022",
@@ -256,97 +257,170 @@ const custoGlobal = dadosComTotal.reduce(
 );
 
 let percentualAcumulado = 0;
+let contA = 0,
+  contB = 0,
+  contC = 0;
+let valA = 0,
+  valB = 0,
+  valC = 0;
+
 const dadosProcessados = dadosComTotal.map((item) => {
   const percentualIndividual = (item.valorTotal / custoGlobal) * 100;
   percentualAcumulado += percentualIndividual;
 
   let faixa = "C";
-  let cor = "bg-green-100 text-green-800";
+  let corBadge =
+    "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+  let trHover = "hover:bg-slate-800/50";
+
   if (percentualAcumulado <= 80) {
     faixa = "A";
-    cor = "bg-red-100 text-red-800";
+    contA++;
+    valA += item.valorTotal;
+    corBadge = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+    trHover = "hover:bg-rose-900/10";
   } else if (percentualAcumulado <= 95) {
     faixa = "B";
-    cor = "bg-yellow-100 text-yellow-800";
+    contB++;
+    valB += item.valorTotal;
+    corBadge = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+    trHover = "hover:bg-amber-900/10";
+  } else {
+    contC++;
+    valC += item.valorTotal;
   }
 
   return {
     ...item,
-    percentualIndividual: percentualIndividual.toFixed(2),
-    percentualAcumulado: percentualAcumulado.toFixed(2),
+    percentualIndividualRaw: percentualIndividual,
+    percentualIndividual: percentualIndividual.toFixed(2).replace(".", ","),
+    percentualAcumulado: percentualAcumulado.toFixed(2).replace(".", ","),
     faixa,
-    cor,
+    corBadge,
+    trHover,
   };
 });
 
-const labels = JSON.stringify(dadosProcessados.map((d) => d.descricao));
+// JSONs para o Chart.js
+const labelsPareto = JSON.stringify(dadosProcessados.map((d) => d.descricao));
 const valoresIndividuais = JSON.stringify(
   dadosProcessados.map((d) => d.valorTotal),
 );
 const valoresAcumulados = JSON.stringify(
-  dadosProcessados.map((d) => d.percentualAcumulado),
+  dadosProcessados.map((d) =>
+    parseFloat(d.percentualAcumulado.replace(",", ".")),
+  ),
+);
+
+// Top 10 Itens para o gráfico de comparação
+const top10 = dadosProcessados.slice(0, 10);
+const labelsTop10 = JSON.stringify(top10.map((d) => d.descricao));
+const valoresTop10 = JSON.stringify(top10.map((d) => d.valorTotal));
+const percentuaisTop10 = JSON.stringify(
+  top10.map((d) => d.percentualIndividualRaw),
 );
 
 const htmlContent = `<!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-BR" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard SAD - Curva ABC</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @keyframes fade-in-up { 0% { opacity: 0; transform: translateY(20px); } 100% { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in-up { animation: fade-in-up 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+        .delay-100 { animation-delay: 100ms; }
+        .delay-200 { animation-delay: 200ms; }
+        .delay-300 { animation-delay: 300ms; }
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #0f172a; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
+    </style>
 </head>
-<body class="bg-gray-50 text-gray-800 p-8 font-sans">
-    <div class="max-w-7xl mx-auto">
-        <header class="mb-8 flex justify-between items-end border-b pb-4">
+<body class="bg-slate-950 text-slate-300 p-4 md:p-8 font-sans min-h-screen selection:bg-violet-500/30 selection:text-violet-200">
+    <div class="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.02] pointer-events-none"></div>
+    <div class="fixed top-[-10%] left-[-10%] w-96 h-96 bg-violet-600/20 rounded-full blur-3xl pointer-events-none"></div>
+    <div class="fixed bottom-[-10%] right-[-10%] w-96 h-96 bg-blue-600/10 rounded-full blur-3xl pointer-events-none"></div>
+
+    <div class="max-w-[1400px] mx-auto relative z-10">
+        
+        <header class="mb-8 flex flex-col md:flex-row md:justify-between md:items-end border-b border-slate-800 pb-6 animate-fade-in-up">
             <div>
-                <h1 class="text-4xl font-extrabold bg-gradient-to-r from-violet-400 to-blue-400 text-transparent bg-clip-text">Sistema de Apoio à Decisão</h1>
-                <p class="text-gray-500 mt-2 text-lg">Dashboard Interativo - Curva ABC de Orçamento</p>
+                <h1 class="text-4xl md:text-5xl font-black bg-gradient-to-r from-violet-400 to-blue-400 text-transparent bg-clip-text tracking-tight pb-1">Painel Gerencial SGF</h1>
+                <p class="text-slate-400 mt-2 text-lg font-light">Análise Multidimensional • Curva ABC</p>
             </div>
-            <div class="text-right">
-                <p class="text-sm text-gray-500 uppercase font-bold tracking-wider">Custo Global Analisado</p>
-                <p class="text-3xl font-black text-gray-800">R$ ${custoGlobal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            <div class="mt-6 md:mt-0 md:text-right bg-slate-900/80 p-4 rounded-2xl border border-slate-800 backdrop-blur-md">
+                <p class="text-xs text-slate-500 uppercase font-bold tracking-widest mb-1">Custo Global Analisado</p>
+                <p class="text-3xl font-black text-white tracking-tight">R$ ${custoGlobal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
             </div>
         </header>
 
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
-            <h2 class="text-xl font-bold mb-4 text-gray-700">Gráfico de Pareto (80/20)</h2>
-            <div class="relative h-[400px] w-full">
-                <canvas id="paretoChart"></canvas>
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            
+            <div class="lg:col-span-3 bg-slate-900/50 backdrop-blur-md p-6 rounded-3xl border border-slate-800 animate-fade-in-up delay-100">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-xl font-bold text-slate-200 flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-violet-500"></span> Curva de Pareto Geral (80/20)
+                    </h2>
+                </div>
+                <div class="relative h-[350px] w-full"><canvas id="paretoChart"></canvas></div>
+            </div>
+
+            <div class="bg-slate-900/50 backdrop-blur-md p-6 rounded-3xl border border-slate-800 animate-fade-in-up delay-200">
+                <h2 class="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-rose-500"></span> Top 10 Impacto (%) vs Valor
+                </h2>
+                <div class="relative h-[250px] w-full"><canvas id="top10Chart"></canvas></div>
+            </div>
+
+            <div class="bg-slate-900/50 backdrop-blur-md p-6 rounded-3xl border border-slate-800 animate-fade-in-up delay-200 flex flex-col items-center">
+                <h2 class="text-lg font-bold text-slate-200 mb-4 self-start flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-blue-500"></span> % Qtd de Itens por Faixa ABC
+                </h2>
+                <div class="relative h-[220px] w-full flex justify-center"><canvas id="doughnutChart"></canvas></div>
+            </div>
+
+            <div class="bg-slate-900/50 backdrop-blur-md p-6 rounded-3xl border border-slate-800 animate-fade-in-up delay-200">
+                <h2 class="text-lg font-bold text-slate-200 mb-4 flex items-center gap-2">
+                    <span class="w-3 h-3 rounded-full bg-amber-500"></span> Valor Financeiro por Faixa
+                </h2>
+                <div class="relative h-[250px] w-full"><canvas id="resumoChart"></canvas></div>
             </div>
         </div>
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="p-6 border-b border-gray-100">
-                <h2 class="text-xl font-bold text-gray-700">Detalhamento dos Itens</h2>
+        <div class="bg-slate-900/50 backdrop-blur-md rounded-3xl border border-slate-800 overflow-hidden animate-fade-in-up delay-300 mb-10">
+            <div class="p-6 border-b border-slate-800 bg-slate-900/80">
+                <h2 class="text-xl font-bold text-slate-200">Detalhamento Analítico</h2>
             </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
-                    <thead>
-                        <tr class="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
-                            <th class="p-4 font-semibold border-b">Código</th>
-                            <th class="p-4 font-semibold border-b">Descrição</th>
-                            <th class="p-4 font-semibold border-b text-right">Valor Total (R$)</th>
-                            <th class="p-4 font-semibold border-b text-center">% Indiv.</th>
-                            <th class="p-4 font-semibold border-b text-center">% Acum.</th>
-                            <th class="p-4 font-semibold border-b text-center">Faixa</th>
+            <div class="overflow-x-auto max-h-[500px] overflow-y-auto">
+                <table class="w-full text-left border-collapse relative">
+                    <thead class="sticky top-0 bg-slate-950/90 backdrop-blur-md z-10">
+                        <tr class="text-slate-400 text-xs uppercase tracking-widest">
+                            <th class="p-4 font-semibold border-b border-slate-800">Código</th>
+                            <th class="p-4 font-semibold border-b border-slate-800">Descrição do Serviço/Material</th>
+                            <th class="p-4 font-semibold border-b border-slate-800 text-right">Total (R$)</th>
+                            <th class="p-4 font-semibold border-b border-slate-800 text-center">% Indiv.</th>
+                            <th class="p-4 font-semibold border-b border-slate-800 text-center">% Acum.</th>
+                            <th class="p-4 font-semibold border-b border-slate-800 text-center">Faixa</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100">
+                    <tbody class="divide-y divide-slate-800/50">
                         ${dadosProcessados
                           .map(
                             (item) => `
-                        <tr class="hover:bg-gray-50 transition-colors">
-                            <td class="p-4 text-sm font-mono text-gray-500">${item.codigo}</td>
-                            <td class="p-4 text-sm font-medium text-gray-800">${item.descricao}</td>
-                            <td class="p-4 text-sm font-mono text-right text-gray-600">${item.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                            <td class="p-4 text-sm font-mono text-center text-gray-600">${item.percentualIndividual.replace(".", ",")}%</td>
-                            <td class="p-4 text-sm font-mono text-center text-gray-600">${item.percentualAcumulado.replace(".", ",")}%</td>
+                        <tr class="${item.trHover} transition-colors duration-200">
+                            <td class="p-4 text-xs font-mono text-slate-500">${item.codigo}</td>
+                            <td class="p-4 text-xs font-medium text-slate-300">${item.descricao}</td>
+                            <td class="p-4 text-xs font-mono text-right text-slate-300">${item.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</td>
+                            <td class="p-4 text-xs font-mono text-center text-slate-400">${item.percentualIndividual}%</td>
+                            <td class="p-4 text-xs font-mono text-center text-slate-400">${item.percentualAcumulado}%</td>
                             <td class="p-4 text-center">
-                                <span class="px-3 py-1 rounded-full text-xs font-bold ${item.cor}">${item.faixa}</span>
+                                <span class="px-2 py-1 rounded text-[10px] font-black tracking-wide ${item.corBadge}">${item.faixa}</span>
                             </td>
-                        </tr>
-                        `,
+                        </tr>`,
                           )
                           .join("")}
                     </tbody>
@@ -356,117 +430,69 @@ const htmlContent = `<!DOCTYPE html>
     </div>
 
     <script>
-        const ctx = document.getElementById('paretoChart').getContext('2d');
-        new Chart(ctx, {
+        Chart.defaults.color = '#64748b';
+        Chart.defaults.font.family = "ui-sans-serif, system-ui, sans-serif";
+        
+        // 1. Gráfico de Pareto
+        const ctxPareto = document.getElementById('paretoChart').getContext('2d');
+        const gradPareto = ctxPareto.createLinearGradient(0, 0, 0, 400);
+        gradPareto.addColorStop(0, '#8b5cf6'); gradPareto.addColorStop(1, '#3b82f6');
+
+        new Chart(ctxPareto, {
             type: 'bar',
             data: {
-                labels: ${labels},
+                labels: ${labelsPareto},
                 datasets: [
-                    {
-                        label: 'Percentual Acumulado (%)',
-                        data: ${valoresAcumulados},
-                        type: 'line',
-                        borderColor: '#ef4444',
-                        backgroundColor: '#ef4444',
-                        borderWidth: 3,
-                        pointBackgroundColor: '#fff',
-                        pointBorderColor: '#ef4444',
-                        pointRadius: 4,
-                        yAxisID: 'y1',
-                        order: 1
-                    },
-                    {
-                        label: 'Valor Total (R$)',
-                        data: ${valoresIndividuais},
-                        backgroundColor: '#818cf8',
-                        borderRadius: 4,
-                        yAxisID: 'y',
-                        order: 2
-                    }
+                    { label: '% Acumulado', data: ${valoresAcumulados}, type: 'line', borderColor: '#f43f5e', backgroundColor: '#f43f5e', borderWidth: 2, pointRadius: 3, yAxisID: 'y1', order: 1 },
+                    { label: 'Valor Total (R$)', data: ${valoresIndividuais}, backgroundColor: gradPareto, borderRadius: 4, yAxisID: 'y', order: 2 }
                 ]
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false,
-                },
-                plugins: {
-                    legend: {
-                        position: 'top',
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) {
-                                    label += ': ';
-                                }
-                                if (context.dataset.yAxisID === 'y') {
-                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
-                                } else {
-                                    label += context.raw + '%';
-                                }
-                                return label;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        grid: {
-                            display: false
-                        },
-                        ticks: {
-                            maxRotation: 45,
-                            minRotation: 45,
-                            callback: function(value, index, values) {
-                                const label = this.getLabelForValue(value);
-                                return label.length > 15 ? label.substring(0, 15) + '...' : label;
-                            }
-                        }
-                    },
-                    y: {
-                        type: 'linear',
-                        display: true,
-                        position: 'left',
-                        title: {
-                            display: true,
-                            text: 'Valor Financeiro (R$)'
-                        },
-                        grid: {
-                            borderDash: [4, 4]
-                        }
-                    },
-                    y1: {
-                        type: 'linear',
-                        display: true,
-                        position: 'right',
-                        max: 105,
-                        title: {
-                            display: true,
-                            text: 'Percentual Acumulado (%)'
-                        },
-                        grid: {
-                            display: false
-                        }
-                    }
-                }
-            }
+            options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: false } }, scales: { x: { ticks: { display: false } }, y: { type: 'linear', position: 'left', grid: { color: 'rgba(51, 65, 85, 0.2)' } }, y1: { type: 'linear', position: 'right', max: 105, grid: { display: false } } } }
+        });
+
+        // 2. Gráfico Top 10 (% vs Valor)
+        const ctxTop = document.getElementById('top10Chart').getContext('2d');
+        new Chart(ctxTop, {
+            type: 'bar',
+            data: {
+                labels: ${labelsTop10},
+                datasets: [
+                    { label: '% Individual', data: ${percentuaisTop10}, backgroundColor: '#f43f5e', yAxisID: 'y1' },
+                    { label: 'Valor Total', data: ${valoresTop10}, backgroundColor: '#f59e0b', yAxisID: 'y' }
+                ]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10 } } }, scales: { x: { ticks: { display: false } }, y: { display: false, position: 'right' }, y1: { display: true, position: 'left' } } }
+        });
+
+        // 3. Gráfico Doughnut (Qtd Itens por Faixa)
+        const ctxDoughnut = document.getElementById('doughnutChart').getContext('2d');
+        new Chart(ctxDoughnut, {
+            type: 'doughnut',
+            data: {
+                labels: ['Faixa A', 'Faixa B', 'Faixa C'],
+                datasets: [{ data: [${contA}, ${contB}, ${contC}], backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'], borderWidth: 0, hoverOffset: 4 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'right' } } }
+        });
+
+        // 4. Gráfico de Valores por Faixa
+        const ctxResumo = document.getElementById('resumoChart').getContext('2d');
+        new Chart(ctxResumo, {
+            type: 'bar',
+            data: {
+                labels: ['Faixa A', 'Faixa B', 'Faixa C'],
+                datasets: [{ label: 'Valor Acumulado (R$)', data: [${valA}, ${valB}, ${valC}], backgroundColor: ['#f43f5e', '#f59e0b', '#10b981'], borderRadius: 6 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: 'rgba(51, 65, 85, 0.2)' } } } }
         });
     </script>
 </body>
 </html>`;
 
 fs.writeFileSync("dashboard.html", htmlContent, "utf8");
-console.log("");
-console.log("=========================================");
-console.log(" ✅ DASHBOARD GERADO COM SUCESSO!");
-console.log("=========================================");
-console.log(" -> Vá no Explorador de Arquivos do Windows");
-console.log(" -> Dê dois cliques no arquivo 'dashboard.html'");
 console.log(
-  " -> Ele vai abrir no seu navegador com o gráfico e a tabela prontos.",
+  "\n✅ NOVO DASHBOARD GERADO: Pareto + Gráfico Redondo + Comparações.",
 );
-console.log("=========================================\n");
+console.log(
+  "👉 Dê dois cliques em 'dashboard.html' e veja a mágica no navegador!\n",
+);
