@@ -255,34 +255,218 @@ const custoGlobal = dadosComTotal.reduce(
   0,
 );
 
-let csvContent =
-  "Código;Descrição;Qtd;Valor Unitário (R$);Valor Total (R$);% Individual;% Acumulado;Faixa ABC\n";
 let percentualAcumulado = 0;
-
-dadosComTotal.forEach((item) => {
+const dadosProcessados = dadosComTotal.map((item) => {
   const percentualIndividual = (item.valorTotal / custoGlobal) * 100;
   percentualAcumulado += percentualIndividual;
 
   let faixa = "C";
+  let cor = "bg-green-100 text-green-800";
   if (percentualAcumulado <= 80) {
     faixa = "A";
+    cor = "bg-red-100 text-red-800";
   } else if (percentualAcumulado <= 95) {
     faixa = "B";
+    cor = "bg-yellow-100 text-yellow-800";
   }
 
-  const vUnitarioBR = item.valorUnitario.toFixed(2).replace(".", ",");
-  const vTotalBR = item.valorTotal.toFixed(2).replace(".", ",");
-  const pIndivBR = percentualIndividual.toFixed(2).replace(".", ",");
-  const pAcumBR = percentualAcumulado.toFixed(2).replace(".", ",");
-
-  const linha = `${item.codigo};${item.descricao};${item.qtd};${vUnitarioBR};${vTotalBR};${pIndivBR}%;${pAcumBR}%;${faixa}`;
-  csvContent += linha + "\n";
+  return {
+    ...item,
+    percentualIndividual: percentualIndividual.toFixed(2),
+    percentualAcumulado: percentualAcumulado.toFixed(2),
+    faixa,
+    cor,
+  };
 });
 
-fs.writeFileSync("Curva_ABC_SGF_Completa.csv", csvContent, "utf8");
-
-console.log(`\n✅ Sucesso! Arquivo 'Curva_ABC_SGF_Completa.csv' gerado.`);
-console.log(`💰 Custo global analisado: R$ ${custoGlobal.toFixed(2)}`);
-console.log(
-  `👉 DICA PARA ABRIR NO EXCEL:\n   1. Na barra lateral esquerda do VS Code, clique com o botão DIREITO no arquivo 'Curva_ABC_SGF_Completa.csv'.\n   2. Selecione a opção "Reveal in File Explorer" (ou "Revelar no Explorador de Arquivos").\n   3. Na pasta do Windows que vai abrir, dê dois cliques no arquivo para abri-lo corretamente no Excel!`,
+const labels = JSON.stringify(dadosProcessados.map((d) => d.descricao));
+const valoresIndividuais = JSON.stringify(
+  dadosProcessados.map((d) => d.valorTotal),
 );
+const valoresAcumulados = JSON.stringify(
+  dadosProcessados.map((d) => d.percentualAcumulado),
+);
+
+const htmlContent = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard SAD - Curva ABC</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 text-gray-800 p-8 font-sans">
+    <div class="max-w-7xl mx-auto">
+        <header class="mb-8 flex justify-between items-end border-b pb-4">
+            <div>
+                <h1 class="text-4xl font-extrabold bg-gradient-to-r from-violet-400 to-blue-400 text-transparent bg-clip-text">Sistema de Apoio à Decisão</h1>
+                <p class="text-gray-500 mt-2 text-lg">Dashboard Interativo - Curva ABC de Orçamento</p>
+            </div>
+            <div class="text-right">
+                <p class="text-sm text-gray-500 uppercase font-bold tracking-wider">Custo Global Analisado</p>
+                <p class="text-3xl font-black text-gray-800">R$ ${custoGlobal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+            </div>
+        </header>
+
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 mb-8">
+            <h2 class="text-xl font-bold mb-4 text-gray-700">Gráfico de Pareto (80/20)</h2>
+            <div class="relative h-[400px] w-full">
+                <canvas id="paretoChart"></canvas>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div class="p-6 border-b border-gray-100">
+                <h2 class="text-xl font-bold text-gray-700">Detalhamento dos Itens</h2>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="bg-gray-50 text-gray-500 text-sm uppercase tracking-wider">
+                            <th class="p-4 font-semibold border-b">Código</th>
+                            <th class="p-4 font-semibold border-b">Descrição</th>
+                            <th class="p-4 font-semibold border-b text-right">Valor Total (R$)</th>
+                            <th class="p-4 font-semibold border-b text-center">% Indiv.</th>
+                            <th class="p-4 font-semibold border-b text-center">% Acum.</th>
+                            <th class="p-4 font-semibold border-b text-center">Faixa</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-100">
+                        ${dadosProcessados
+                          .map(
+                            (item) => `
+                        <tr class="hover:bg-gray-50 transition-colors">
+                            <td class="p-4 text-sm font-mono text-gray-500">${item.codigo}</td>
+                            <td class="p-4 text-sm font-medium text-gray-800">${item.descricao}</td>
+                            <td class="p-4 text-sm font-mono text-right text-gray-600">${item.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td class="p-4 text-sm font-mono text-center text-gray-600">${item.percentualIndividual.replace(".", ",")}%</td>
+                            <td class="p-4 text-sm font-mono text-center text-gray-600">${item.percentualAcumulado.replace(".", ",")}%</td>
+                            <td class="p-4 text-center">
+                                <span class="px-3 py-1 rounded-full text-xs font-bold ${item.cor}">${item.faixa}</span>
+                            </td>
+                        </tr>
+                        `,
+                          )
+                          .join("")}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ctx = document.getElementById('paretoChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ${labels},
+                datasets: [
+                    {
+                        label: 'Percentual Acumulado (%)',
+                        data: ${valoresAcumulados},
+                        type: 'line',
+                        borderColor: '#ef4444',
+                        backgroundColor: '#ef4444',
+                        borderWidth: 3,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#ef4444',
+                        pointRadius: 4,
+                        yAxisID: 'y1',
+                        order: 1
+                    },
+                    {
+                        label: 'Valor Total (R$)',
+                        data: ${valoresIndividuais},
+                        backgroundColor: '#818cf8',
+                        borderRadius: 4,
+                        yAxisID: 'y',
+                        order: 2
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                let label = context.dataset.label || '';
+                                if (label) {
+                                    label += ': ';
+                                }
+                                if (context.dataset.yAxisID === 'y') {
+                                    label += new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(context.raw);
+                                } else {
+                                    label += context.raw + '%';
+                                }
+                                return label;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: {
+                            display: false
+                        },
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45,
+                            callback: function(value, index, values) {
+                                const label = this.getLabelForValue(value);
+                                return label.length > 15 ? label.substring(0, 15) + '...' : label;
+                            }
+                        }
+                    },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        title: {
+                            display: true,
+                            text: 'Valor Financeiro (R$)'
+                        },
+                        grid: {
+                            borderDash: [4, 4]
+                        }
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        max: 105,
+                        title: {
+                            display: true,
+                            text: 'Percentual Acumulado (%)'
+                        },
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>`;
+
+fs.writeFileSync("dashboard.html", htmlContent, "utf8");
+console.log("");
+console.log("=========================================");
+console.log(" ✅ DASHBOARD GERADO COM SUCESSO!");
+console.log("=========================================");
+console.log(" -> Vá no Explorador de Arquivos do Windows");
+console.log(" -> Dê dois cliques no arquivo 'dashboard.html'");
+console.log(
+  " -> Ele vai abrir no seu navegador com o gráfico e a tabela prontos.",
+);
+console.log("=========================================\n");
